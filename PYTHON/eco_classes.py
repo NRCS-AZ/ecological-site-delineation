@@ -205,14 +205,6 @@ def boundary(raster):
 
     return rect
 
-    
-
-# TEST RUN THE DATA
-
-dem = "c:/Users/andrew.burnes/Documents/GIS/response-units/test/data/dem.img"
-aoi = "c:/Users/andrew.burnes/Documents/GIS/response-units/test/data/aoi.shp"
-output = "c:/Users/andrew.burnes/Documents/GIS/response-units/test/data/output"
-
 def run_test(dem, aoi, out_path):
 
     # Checkout Extension and Set workspace
@@ -247,16 +239,6 @@ def run_test(dem, aoi, out_path):
     hli = calc_hli(dem)
     hli.save(os.path.join(final_output, "hli.img"))
 
-    # GETTING GARBAGE RASTER LIST
-##    print "cOLLECTING temp Raster List"
-##    tmp_list = ap.ListRasters()
-    
-
-##    for tmp in tmp_list:
-##        bs_name = ap.Describe(tmp).baseName
-##        tmp_path = os.path.join(ap.env.workspace, str(bs_name) + "*")
-##        os.remove(tmp_path)
-
     ap.env.workspace = os.path.join(out_path, "final")
     rasters = ap.ListRasters()
 
@@ -289,6 +271,49 @@ def run_test(dem, aoi, out_path):
     
     checkin_ext("Spatial")
 
-run_test(dem, aoi, output)
+def aoi_classify(ndvi, satv, dem, aoi, output):
+    '''Returns the unsupervised ecosite classification in a given AOI
+    '''
 
-print os.path.abspath(os.path.join(output, os.pardir))
+    if os.path.exists(output) != True:
+        os.mkdir(output)
+
+    checkout_ext("Spatial")
+
+    ap.env.workspace = output
+
+    bndry = boundary(aoi)
+
+    clipped_path = os.path.join(os.path.abspath(os.path.join(output, os.pardir)), 'clipped')
+
+    # cLIP DEM TO AOI
+    print "Clipping DEM to AOI"
+    clip(dem, clipped_path, "dem.img", bndry)
+
+    # Clip NDVI to AOI
+    print "Clipping NDVI to AOI"
+    clip(ndvi, clipped_path, "ndvi.img", bndry)
+
+    # CLIP SATV TO AOI
+    print "Clipping SATV to AOI"
+    clip(satv, clipped_path, "satv.img", bndry)
+
+    # SET AOI DEM TO CALCULATE SURFACES
+    clipped_dem = os.path.join(clipped_path, "dem.img")
+
+    # RUN THE DEM SURFACE DERIVATIVES
+    print "Calculating dem Surfaces"
+    run_test(clipped_dem, aoi, output)
+
+
+# TEST RUN THE DATA
+
+dem = "F:/Elevation_Data/NED_10m/Lattices/Pinal/ned10m_1-1"
+aoi = "c:/Users/andrew.burnes/Documents/GIS/response-units/test/data/aoi_2.shp"
+ndvi = "c:/landsat/processed/toa/LC80370372014028LGN00_NDVI.img"
+satv = "F:/Raster_Data/Cover/cover_spring11.img"
+output = "c:/Users/andrew.burnes/Documents/GIS/response-units/test/data/output"
+
+aoi_classify(ndvi, satv, dem, aoi, output)
+    
+
