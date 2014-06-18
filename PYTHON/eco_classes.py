@@ -13,28 +13,11 @@ import numpy as np
 import os, sys, time, glob, math, string, shutil
 from math import pi, sin, cos, tan, sqrt
 
-# Transform all terain derrevatives
-def terrain_der(path):
-    '''Transform the DEM elevation data into slope, radiation, and ruggedness
 
-        @type    path: c{str}
-        @param   path: Path to DEM file directory
-        @rtype   raster
-    '''
+#    
+# ASSORTMENT OF TERRAIN DERIVATIVES BASED ON DEM
+#
 
-    # Calc Slope
-    slope = ap.sa.Slope(path, "PERCENT_RISE")
-    slope.save("slope.img")
-
-    # Calc roughness
-    roughness = calc_roughness(path)
-    roughness.save("roughness.img")
-
-    # Calc solar radiation
-    hli = calc_hli(path)
-    hli.save("hli.img")
-    
-# Individual Terrain Derrivavtive functions
 def calc_roughness(dem):
     '''Calculate and reclassifiy the roughness of the terrain
 
@@ -44,7 +27,6 @@ def calc_roughness(dem):
     '''
 
     # START SPATIAL ANALYST AND GET DEM METADATA
-    # checkout_ext("Spatial")
     dem_desc = ap.Describe(dem)
     ext = dem_desc.extent
     rect = str(str(ext.XMin) + " " + str(ext.YMin) + " " + str(ext.XMax) + " " + str(ext.YMax))
@@ -56,11 +38,8 @@ def calc_roughness(dem):
     # CALC DEM STD AND TAKE THE SQ ROOT
     focalstats_tmp = ap.sa.FocalStatistics(dem, "#", "STD")
     roughness = ap.sa.SquareRoot(focalstats_tmp)
-    rough_slice = ap.sa.Slice(roughness, 3, "NATURAL_BREAKS")
-    aggr_10 = ap.sa.Aggregate(rough_slice, 10, "MEDIAN", "TRUNCATE")
-    filter_rough = ap.sa.MajorityFilter(aggr_10, "EIGHT", "MAJORITY")
 
-    return filter_rough
+    return roughness
 
 
 def calc_hli(dem):
@@ -97,20 +76,24 @@ def calc_hli(dem):
 
     return out_raster
 
-        
-# Helper functions
+
+#
+# HELPER FUNCTIONS
+#
+
 def checkout_ext(ext_type):
     if ap.CheckExtension(ext_type) == 'Available':
         ap.CheckOutExtension(ext_type)
-        print "\nChecking out " + ext_type + " Extension"
+        print "Checking out " + ext_type + " Extension"
     else:
         raise LicenseError
-        print "\nCannot checkout " + ext_type + " Extension"
+        print "Cannot checkout " + ext_type + " Extension"
 
 def checkin_ext(ext_type):
     ap.CheckInExtension(ext_type)
-    print "\nChecking in " + ext_type + " Extension"
+    print "Checking in " + ext_type + " Extension"
 
+# CALCULATE AND RETURN LATITUDE OF RASTER CENTER FROM WGS84, UTM NAD83
 def utm_to_lat(raster):
     '''Convert a raster's UTM Northing coordinate center to Latitude'''
     # GET UTM CENTER AND SETUP K CONSTANT
@@ -149,11 +132,15 @@ def utm_to_lat(raster):
                     +(61+90*T1+298*C1+45*T1*T1-252*eprime2-3*C1*C1)*D*D*D*D*D*D/720)
 
     lat = Lat * _rad2deg
+    
     return float(lat)
 
+# NORMALIZE AND STRETCH DATA BETWEEN 0 AND 255
 def stretch(raster, out_path):
     ''' Normalize and stretch raster data from 0 to 255
     '''
+
+    print "Stretching " + ap.Describe(raster).baseName
     # GET MIN AND MAX VALUES FROM SELECTED RASTER
     max_val = ap.GetRasterProperties_management(raster, "MAXIMUM")
     min_val = ap.GetRasterProperties_management(raster, "MINIMUM")
@@ -183,6 +170,7 @@ def stretch(raster, out_path):
     
     out_raster.save(os.path.join(out_path, output_name))
 
+# CLIP RASTER TO AOI BOUNDARY DERIVED FROM THE boundary() function
 def clip(raster, out_path, name, boundary):
     '''Clip raster to designated boundary
     '''
@@ -193,6 +181,7 @@ def clip(raster, out_path, name, boundary):
     output = os.path.join(out_path, name)
     ap.Clip_management(raster, boundary, output, "#", "-999", "NONE")
 
+# RETURNS XY MIN/MAX FROM A RASTER OR VECTOR
 def boundary(raster):
     ''' Get the extent boundary of a raster
     '''
@@ -202,107 +191,105 @@ def boundary(raster):
 
     return rect
 
-def run_dem(dem, aoi, out_path):
+
+##
+##  CREATING THE OUTPUT DATA
+##
+
+def run_dem(dem, out_path):
+    ''' Calculate all of the Terrain DEM Derivatives and normalize the clipped directory
+    '''
 
     # Checkout Extension and Set workspace
-    checkout_ext("Spatial")
     ap.env.workspace = out_path
     ap.env.overwriteOutput = True
-
-    out_bndry = boundary(aoi)
     
     if os.path.exists(out_path) != True:
        os.mkdir(out_path)
 
-    final_output = os.path.join(ap.env.workspace, "final")
-
-    if os.path.exists(final_output) != True:
-        os.mkdir(final_output)
-
     # Calc Slope
     print "Calculating Slope"
     slope = ap.sa.Slope(dem, "PERCENT_RISE")
-    slope.save(os.path.join(final_output, "slope.img"))
+    slope.save(os.path.join(out_path, "slope.img"))
 
     # Calc roughness
-    print "Calculating roughness"
+    print "Calculating Roughness"
     roughness = calc_roughness(dem)
-    roughness.save(os.path.join(final_output, "roughness.img"))
-    #clip(roughness, final_output, "rough.img", out_bndry)
-    #roughness.save("roughness.img")
+    roughness.save(os.path.join(out_path, "roughness.img"))
 
     # Calc solar radiation
-    print "Calculating heat load index"
+    print "Calculating Heat Load Index"
     hli = calc_hli(dem)
-    hli.save(os.path.join(final_output, "hli.img"))
+    hli.save(os.path.join(out_path, "hli.img"))
 
-    ap.env.workspace = os.path.join(out_path, "final")
-    rasters = ap.ListRasters()
 
-    complete = os.path.join(os.path.abspath(os.path.join(output, os.pardir)), 'complete')
-    clipped= os.path.join(os.path.abspath(os.path.join(output, os.pardir)), 'clipped')
+def aoi_data_prep(ndvi, satv, dem, aoi, out_path):
+    '''Returns the unsupervised ecosite classification in a given AOI
+    '''
+
+    if os.path.exists(out_path) != True:
+        os.mkdir(out_path)
+
+    ap.env.workspace = out_path
+    bndry = boundary(aoi)
+
+    # CREATE TEMPORARY "TEMP" DIRECTORY
+    temp = os.path.join(out_path, "temp")
+
+    if os.path.exists(temp) != True:
+        os.mkdir(temp)
+
+    # CREATE FINAL OUTPUT "COMPLETE" DIRECTORY
+    complete = os.path.join(out_path, "complete")
 
     if os.path.exists(complete) != True:
         os.mkdir(complete)
 
-    if os.path.exists(clipped) != True:
-        os.mkdir(clipped)
-
-    # CLIPPING OUPUT RASTERS TO AOI
-    print "Clipping surface rasters to boundary"
-    for img in rasters:
-        print img
-        name = ap.Describe(img).file
-        img_path = os.path.join(ap.env.workspace, name)
-        clip(img_path, clipped, name, out_bndry)
-
-    ap.env.workspace = clipped
-    clips = ap.ListRasters()
-
-    # STRETCH THE CLIPPED DEM DEERIVATIVES
-    print "Normalizing and Stretching Data to Values: 0 - 255"
-    for raster in clips:
-        name = ap.Describe(raster).file
-        raster_path = os.path.join(ap.env.workspace, name)
-        stretch(raster_path, complete)
-    
-    checkin_ext("Spatial")
-
-def aoi_classify(ndvi, satv, dem, aoi, output):
-    '''Returns the unsupervised ecosite classification in a given AOI
-    '''
-
-    if os.path.exists(output) != True:
-        os.mkdir(output)
-
     checkout_ext("Spatial")
-
-    ap.env.workspace = output
-
-    bndry = boundary(aoi)
-
-    clipped_path = os.path.join(os.path.abspath(os.path.join(output, os.pardir)), 'clipped')
-
+    
     # cLIP DEM TO AOI
     print "Clipping DEM to AOI"
-    clip(dem, clipped_path, "dem.img", bndry)
+    clip(dem, temp, "dem.img", bndry)
 
     # Clip NDVI to AOI
     print "Clipping NDVI to AOI"
-    clip(ndvi, clipped_path, "ndvi.img", bndry)
+    clip(ndvi, temp, "ndvi.img", bndry)
 
     # CLIP SATV TO AOI
     print "Clipping SATV to AOI"
-    clip(satv, clipped_path, "satv.img", bndry)
+    clip(satv, temp, "satv.img", bndry)
 
     # SET AOI DEM TO CALCULATE SURFACES
-    clipped_dem = os.path.join(clipped_path, "dem.img")
+    aoi_dem = os.path.join(temp, "dem.img")
 
     # RUN THE DEM SURFACE DERIVATIVES
-    print "Calculating dem Surfaces"
-    run_dem(clipped_dem, aoi, output)
+    run_dem(aoi_dem, temp)
+
+    ap.env.workspace = temp
+    rasters = ap.ListRasters()
+
+    for img in rasters:
+        name = ap.Describe(img).file
+        raster_path = os.path.join(ap.env.workspace, name)
+        stretch(raster_path, complete)
 
     checkin_ext("Spatial")
+
+def rm_tmp_data(output):
+    ''' Remove directories and data 
+    '''
+    parent_dir = os.path.abspath(os.path.join(output, os.pardir))
+    clipped = os.path.join(parent_dir, "clipped")
+
+    try:
+        shutil.rmtree(output)
+        shutil.rmtree(clipped)
+    except:
+        print "Unsuccessful deletion of temporary data."
+    finally:
+        print "Temporary data cleanup complete."
+
+#def run_classify():
 
 
 # TEST RUN THE DATA
@@ -313,23 +300,6 @@ ndvi = "c:/landsat/processed/toa/LC80370372014028LGN00_NDVI.img"
 satv = "F:/Raster_Data/Cover/cover_spring11.img"
 output = "c:/Users/andrew.burnes/Documents/GIS/response-units/test/data/output"
 
-aoi_classify(ndvi, satv, dem, aoi, output)
-    
-clip_ndvi = "C:/Users/andrew.burnes/Documents/GIS/response-units/test/data/clipped/ndvi.img"
-output_clip = os.path.join(output, "stretching")
+aoi_data_prep(ndvi, satv, dem, aoi, output)
 
-def test_stretch(ras, out):
-
-    ap.env.overwriteOutput = True
-    
-    if os.path.exists(out) != True:
-        os.mkdir(out)
-
-    checkout_ext("Spatial")
-
-    stretch(ras, out)
-
-    checkin_ext("Spatial")
-
-#test_stretch(clip_ndvi, output_clip)
 
