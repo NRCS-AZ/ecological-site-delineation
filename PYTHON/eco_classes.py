@@ -159,23 +159,23 @@ def stretch(raster, out_path):
     min_val = ap.GetRasterProperties_management(raster, "MINIMUM")
 
     # GET RASTER EXTENT and Cell Size
-    extent = ap.Describe(raster).extent
+    desc = ap.Describe(raster)
     ap.env.cellSize = raster
     ap.env.extent = raster
 
     # CREATE RASTER CONSTANTS
-    max_raster = ap.sa.CreateConstantRaster(max_val, "INTEGER")
-    min_raster = ap.sa.CreateConstantRaster(min_val, "INTEGER")
+    max_raster = ap.sa.CreateConstantRaster(max_val, "FLOAT", desc.MeanCellHeight, ap.env.extent)
+    min_raster = ap.sa.CreateConstantRaster(min_val, "FLOAT", desc.MeanCellHeight, ap.env.extent)
 
     # SET THE NEW RASTER RANGE
     INPUT_MAX = 255
     INPUT_MIN = 0
 
-    input_max_raster = ap.sa.CreateConstantRaster(INPUT_MAX, "INTEGER")
-    input_min_raster = ap.sa.CreateConstantRaster(INPUT_MIN, "INTEGER")
+    input_max_raster = ap.sa.CreateConstantRaster(INPUT_MAX, "FLOAT", desc.MeanCellHeight, ap.env.extent)
+    input_min_raster = ap.sa.CreateConstantRaster(INPUT_MIN, "FLOAT", desc.MeanCellHeight, ap.env.extent)
 
-    out_raster = (raster - min_raster) * input_max_raster / (max_raster - min_raster) + input_min_raster    
-    output_name = ap.Describe(raster).baseName + ".img"
+    out_raster = ((raster - min_raster) * input_max_raster) / ((max_raster - min_raster) + input_min_raster)
+    output_name = desc.baseName + ".img"
 ##    out_path = os.path.join(ap.env.workspace, name)
 
     if os.path.exists(out_path) != True:
@@ -189,11 +189,8 @@ def clip(raster, out_path, name, boundary):
 
     if os.path.exists(out_path) != True:
         os.mkdir(out_path)
-
-    print boundary
         
     output = os.path.join(out_path, name)
-
     ap.Clip_management(raster, boundary, output, "#", "-999", "NONE")
 
 def boundary(raster):
@@ -205,7 +202,7 @@ def boundary(raster):
 
     return rect
 
-def run_test(dem, aoi, out_path):
+def run_dem(dem, aoi, out_path):
 
     # Checkout Extension and Set workspace
     checkout_ext("Spatial")
@@ -303,7 +300,9 @@ def aoi_classify(ndvi, satv, dem, aoi, output):
 
     # RUN THE DEM SURFACE DERIVATIVES
     print "Calculating dem Surfaces"
-    run_test(clipped_dem, aoi, output)
+    run_dem(clipped_dem, aoi, output)
+
+    checkin_ext("Spatial")
 
 
 # TEST RUN THE DATA
@@ -316,4 +315,21 @@ output = "c:/Users/andrew.burnes/Documents/GIS/response-units/test/data/output"
 
 aoi_classify(ndvi, satv, dem, aoi, output)
     
+clip_ndvi = "C:/Users/andrew.burnes/Documents/GIS/response-units/test/data/clipped/ndvi.img"
+output_clip = os.path.join(output, "stretching")
+
+def test_stretch(ras, out):
+
+    ap.env.overwriteOutput = True
+    
+    if os.path.exists(out) != True:
+        os.mkdir(out)
+
+    checkout_ext("Spatial")
+
+    stretch(ras, out)
+
+    checkin_ext("Spatial")
+
+#test_stretch(clip_ndvi, output_clip)
 
