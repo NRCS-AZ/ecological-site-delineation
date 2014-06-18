@@ -279,9 +279,11 @@ def rm_tmp_data(out_path):
     ''' Remove directories and data 
     '''
     temp = os.path.join(out_path, "temp")
+    comp = os.path.join(out_path, "complete")
 
     try:
         shutil.rmtree(temp)
+        shutil.rmtree(comp)
     except:
         print "Unsuccessful deletion of temporary data."
     finally:
@@ -299,8 +301,9 @@ def run_iso(in_path, out_path=None):
         out_path = os.path.abspath(os.path.join(in_path, os.pardir))
 
     out_name = os.path.join(out_path, "clusters.img")
+    out_sig = os.path.join(out_path, "cluster_sig.gsg")
 
-    clusters = ap.sa.IsoClusterUnsupervisedClassification(rasters, 12, "#", "#")
+    clusters = ap.sa.IsoClusterUnsupervisedClassification(rasters, 12, "#", "#", out_sig)
     clusters.save(out_name)
 
     checkin_ext("Spatial")
@@ -310,12 +313,13 @@ def run_iso(in_path, out_path=None):
 def output_data(ndvi, satv, dem, aoi, out_path):
     aoi_data_prep(ndvi, satv, dem, aoi, out_path)
 
-    print "Removing Temp Data"
-    rm_tmp_data(out_path)
-
     complete = os.path.join(out_path, "complete")
     print "Running IsoCluster"
     run_iso(complete)
+
+    print "Removing Temp Data"
+    rm_tmp_data(out_path)
+
 
 dem = "F:/Elevation_Data/NED_10m/Lattices/Pinal/ned10m_1-1"
 aoi = "c:/Users/andrew.burnes/Documents/GIS/response-units/test/data/aoi_2.shp"
