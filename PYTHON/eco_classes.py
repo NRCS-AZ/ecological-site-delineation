@@ -275,24 +275,47 @@ def aoi_data_prep(ndvi, satv, dem, aoi, out_path):
 
     checkin_ext("Spatial")
 
-def rm_tmp_data(output):
+def rm_tmp_data(out_path):
     ''' Remove directories and data 
     '''
-    parent_dir = os.path.abspath(os.path.join(output, os.pardir))
-    clipped = os.path.join(parent_dir, "clipped")
+    temp = os.path.join(out_path, "temp")
 
     try:
-        shutil.rmtree(output)
-        shutil.rmtree(clipped)
+        shutil.rmtree(temp)
     except:
         print "Unsuccessful deletion of temporary data."
     finally:
         print "Temporary data cleanup complete."
 
-#def run_classify():
+def run_iso(in_path, out_path=None):
+    ''' Run an Unspervised classification on the list of rasters in the specified in_path directory
+    '''
+    # SET UP ENVIRONMENT AND VARIABLES
+    ap.env.workspace = in_path
+    rasters = ap.ListRasters()
+    checkout_ext("Spatial")
 
+    if out_path is None:
+        out_path = os.path.abspath(os.path.join(in_path, os.pardir))
 
+    out_name = os.path.join(out_path, "clusters.img")
+
+    clusters = ap.sa.IsoClusterUnsupervisedClassification(rasters, 12, "#", "#")
+    clusters.save(out_name)
+
+    checkin_ext("Spatial")
+    
 # TEST RUN THE DATA
+
+def output_data(ndvi, satv, dem, aoi, out_path):
+    aoi_data_prep(ndvi, satv, dem, aoi, out_path)
+
+    print "Removing Temp Data"
+    rm_tmp_data(out_path)
+
+    complete = os.path.join(out_path, "complete")
+    print "Running IsoCluster"
+    run_iso(complete)
 
 dem = "F:/Elevation_Data/NED_10m/Lattices/Pinal/ned10m_1-1"
 aoi = "c:/Users/andrew.burnes/Documents/GIS/response-units/test/data/aoi_2.shp"
@@ -300,6 +323,6 @@ ndvi = "c:/landsat/processed/toa/LC80370372014028LGN00_NDVI.img"
 satv = "F:/Raster_Data/Cover/cover_spring11.img"
 output = "c:/Users/andrew.burnes/Documents/GIS/response-units/test/data/output"
 
-aoi_data_prep(ndvi, satv, dem, aoi, output)
+output_data(ndvi, satv, dem, aoi, output)
 
 
